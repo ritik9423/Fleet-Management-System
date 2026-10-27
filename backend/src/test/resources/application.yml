@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: fleet-ops-test
+
+  datasource:
+    url: jdbc:h2:mem:fleetops_test;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  flyway:
+    enabled: false
+
+server:
+  port: 0
+
+app:
+  jwt:
+    secret: ZmxlZXRvcHNhcGlzZWNyZXRrZXlmb3Jqd3RhdXRoMjAyNg==
+    expiration: 86400000
