@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import {
   Navigation,
-  Compass,
   Radio,
   MapPin,
   Fuel,
@@ -10,7 +9,6 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  Warehouse,
   Truck,
   Phone,
 } from "lucide-react"
@@ -170,8 +168,8 @@ export function LiveMapPage() {
     return filteredVehicles.slice(start, start + pageSize)
   }, [filteredVehicles, currentPage, pageSize])
 
-  // Real InTouch Geofences / Hubs
-  const [showGeofences, setShowGeofences] = useState(false)
+  // Real InTouch Geofences / Hubs (Auto-ON by default)
+  const [showGeofences] = useState(true)
   const [geofences, setGeofences] = useState<any[]>([])
   const geofenceMarkersRef = useRef<any[]>([])
 
@@ -823,42 +821,7 @@ export function LiveMapPage() {
             </div>
           </div>
 
-          {/* Bottom Left Quick Action Buttons */}
-          <div className="absolute bottom-3 sm:bottom-4 left-3 sm:left-4 z-[20] flex items-center gap-2">
-            <button
-              onClick={resetCorridorView}
-              className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl bg-white/95 backdrop-blur-md border border-slate-200 text-xs font-bold text-slate-700 hover:text-[#0078d4] shadow-md transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Compass className="h-3.5 w-3.5 text-[#0078d4]" />
-              <span className="text-[10px] sm:text-xs">Reset Corridor</span>
-            </button>
-            <button
-              onClick={() => setShowGeofences(!showGeofences)}
-              className={`px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl backdrop-blur-md border text-xs font-bold shadow-md transition-colors flex items-center gap-1.5 cursor-pointer ${
-                showGeofences
-                  ? "bg-blue-600 border-blue-600 text-white"
-                  : "bg-white/95 border-slate-200 text-slate-700 hover:text-blue-600"
-              }`}
-            >
-              <Warehouse className={`h-3.5 w-3.5 ${showGeofences ? "text-white" : "text-blue-600"}`} />
-              <span className="text-[10px] sm:text-xs">
-                {showGeofences ? "Hide Hubs" : `Show Hubs (${geofences.length > 0 ? geofences.length : "36,000+"})`}
-              </span>
-            </button>
-            <button
-              onClick={() => setClusteringEnabled(!clusteringEnabled)}
-              className={`px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl backdrop-blur-md border text-xs font-bold shadow-md transition-colors flex items-center gap-1.5 cursor-pointer ${
-                clusteringEnabled
-                  ? "bg-[#0078d4] border-[#0078d4] text-white"
-                  : "bg-white/95 border-slate-200 text-slate-700 hover:text-[#0078d4]"
-              }`}
-            >
-              <Sparkles className={`h-3.5 w-3.5 ${clusteringEnabled ? "text-white" : "text-[#0078d4]"}`} />
-              <span className="text-[10px] sm:text-xs">
-                {clusteringEnabled ? "Clusters ON" : "Clusters OFF"}
-              </span>
-            </button>
-          </div>
+
         </div>
 
         {/* Right Sidebar: Selected Vehicle Details + Paginated Fleet Units */}
