@@ -1,0 +1,28 @@
+{
+  "folders": [
+    {
+      "name": "FleetOps Backend (Java/Spring Boot)",
+      "path": "backend"
+    },
+    {
+      "name": "FleetOps Frontend (React/Vite)",
+      "path": "frontend"
+    }
+  ],
+  "settings": {
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.import.maven.enabled": true,
+    "java.errors.incompleteClasspath.severity": "ignore",
+    "java.compile.nullAnalysis.mode": "disabled",
+    "java.jdt.ls.lombokSupport.enabled": true,
+    "java.jdt.ls.javac.enabled": "off",
+    "java.jdt.ls.java.home": "C:\\Program Files\\Microsoft\\jdk-17.0.19.10-hotspot",
+    "java.configuration.runtimes": [
+      {
+        "name": "JavaSE-17",
+        "path": "C:\\Program Files\\Microsoft\\jdk-17.0.19.10-hotspot",
+        "default": true
+      }
+    ]
+  }
+}

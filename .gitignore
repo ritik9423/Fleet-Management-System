@@ -1,0 +1,34 @@
+# Backend
+target/
+**/target/
+*.class
+*.jar
+*.war
+application-local.yml
+**/application-local.yml
+
+.env
+.env.local
+.env.production
+
+*.iml
+.idea/
+.vscode/
+.settings/
+.project
+.classpath
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+.DS_Store
+Thumbs.db
+
+# Frontend
+node_modules/
+**/node_modules/
+frontend/dist/
+dist/
+**/dist/
+

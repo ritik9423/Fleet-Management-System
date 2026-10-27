@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: fleetops-backend
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: free
+    region: oregon
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_URL
+        value: jdbc:mysql://mysql-2fe4f7fe-ticketpro-backend-db.h.aivencloud.com:18198/defaultdb?sslMode=REQUIRED&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      - key: DB_USERNAME
+        value: avnadmin
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: MAPPLS_API_KEY
+        sync: false
+      - key: MAPPLS_CLIENT_ID
+        sync: false
+      - key: MAPPLS_CLIENT_SECRET
+        sync: false
+      - key: INTOUCH_CLIENT_ID
+        sync: false
+      - key: INTOUCH_CLIENT_SECRET
+        sync: false
