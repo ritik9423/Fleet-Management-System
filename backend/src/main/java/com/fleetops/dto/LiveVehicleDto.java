@@ -13,6 +13,7 @@ public class LiveVehicleDto {
     private String deviceId;
     private String vehicleName;
     private String vehicleNumber;
+    private String driverName;
     private Double latitude;
     private Double longitude;
     private Double speed;

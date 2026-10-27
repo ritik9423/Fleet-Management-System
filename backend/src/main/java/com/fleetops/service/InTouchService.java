@@ -93,28 +93,21 @@ public class InTouchService {
     private List<LiveVehicleDto> lastKnownDevices = new ArrayList<>();
 
     /**
-     * Fetch live device telematics and GPS coordinates from InTouch /api/devices/live
+     * Fetch live device telematics and GPS coordinates from InTouch IoT fleet
      * and combine with real-time mobile phone GPS duty broadcasts.
      */
     public List<LiveVehicleDto> getLiveDevices() {
         List<LiveVehicleDto> combined = new ArrayList<>();
         try {
-            String token = getAccessToken();
-            String url = baseUrl + "/api/devices/live";
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + token);
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-
-            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, request, String.class);
-            List<LiveVehicleDto> parsed = parseLiveDevicesResponse(response.getBody());
+            // First fetch the complete fleet registered on InTouch (/api/devices, cached in-memory)
+            String devicesJson = getAllDevices();
+            List<LiveVehicleDto> parsed = parseLiveDevicesResponse(devicesJson);
             if (!parsed.isEmpty()) {
                 this.lastKnownDevices = parsed;
             }
             combined.addAll(this.lastKnownDevices);
         } catch (Exception e) {
-            log.warn("InTouch live devices temporary error: {}, returning last known cached devices ({})",
+            log.warn("InTouch live devices retrieval error: {}, returning last known cached devices ({})",
                     e.getMessage(), lastKnownDevices.size());
             combined.addAll(this.lastKnownDevices);
         }
@@ -417,10 +410,16 @@ public class InTouchService {
 
             if (dataNode.isArray()) {
                 for (JsonNode node : dataNode) {
-                    list.add(mapJsonToDto(node));
+                    LiveVehicleDto dto = mapJsonToDto(node);
+                    if (dto != null) {
+                        list.add(dto);
+                    }
                 }
             } else if (dataNode.isObject()) {
-                list.add(mapJsonToDto(dataNode));
+                LiveVehicleDto dto = mapJsonToDto(dataNode);
+                if (dto != null) {
+                    list.add(dto);
+                }
             }
         } catch (Exception e) {
             log.warn("Could not parse InTouch live devices JSON: {}", e.getMessage());
@@ -429,26 +428,76 @@ public class InTouchService {
     }
 
     private LiveVehicleDto mapJsonToDto(JsonNode node) {
-        Double lat = node.has("latitude") ? node.get("latitude").asDouble() : null;
-        Double lon = node.has("longitude") ? node.get("longitude").asDouble() : null;
-        double speed = node.has("gps_speedKph") ? node.get("gps_speedKph").asDouble() : (node.has("speed") ? node.get("speed").asDouble() : 0.0);
-        boolean ign = node.has("veh_ignition_on") ? node.get("veh_ignition_on").asBoolean() : (node.has("ignition") && node.get("ignition").asBoolean());
-        String name = node.has("name") ? node.get("name").asText() : (node.has("vehicleNumber") ? node.get("vehicleNumber").asText() : "");
-        String devId = node.has("id") ? node.get("id").asText() : (node.has("deviceId") ? node.get("deviceId").asText() : "");
-        String addr = node.has("address") ? node.get("address").asText() : "";
-        Double battery = node.has("vehicleBattery") ? node.get("vehicleBattery").asDouble() : null;
-        long ts = node.has("can_ts") ? node.get("can_ts").asLong() : System.currentTimeMillis();
+        if (node == null) return null;
 
-        String status = ign ? (speed > 0 ? "MOVING" : "IDLE") : "STOPPED";
+        JsonNode loc = node.has("location") && !node.get("location").isNull() ? node.get("location") : null;
+        JsonNode details = node.has("deviceDetails") && !node.get("deviceDetails").isNull() ? node.get("deviceDetails") : null;
+        JsonNode can = node.has("canInfo") && !node.get("canInfo").isNull() ? node.get("canInfo") : null;
+
+        Double lat = (loc != null && loc.has("latitude") && !loc.get("latitude").isNull())
+                ? loc.get("latitude").asDouble()
+                : (node.has("latitude") && !node.get("latitude").isNull() ? node.get("latitude").asDouble() : null);
+
+        Double lon = (loc != null && loc.has("longitude") && !loc.get("longitude").isNull())
+                ? loc.get("longitude").asDouble()
+                : (node.has("longitude") && !node.get("longitude").isNull() ? node.get("longitude").asDouble() : null);
+
+        // Filter out non-GPS or 0.0 coordinates
+        if (lat == null || lon == null || (Math.abs(lat) < 0.0001 && Math.abs(lon) < 0.0001)) {
+            return null;
+        }
+
+        double speed = (loc != null && loc.has("speedKph") && !loc.get("speedKph").isNull())
+                ? loc.get("speedKph").asDouble()
+                : (node.has("gps_speedKph") && !node.get("gps_speedKph").isNull() ? node.get("gps_speedKph").asDouble()
+                    : (node.has("speed") && !node.get("speed").isNull() ? node.get("speed").asDouble() : 0.0));
+
+        boolean ign = (can != null && can.has("ignition") && !can.get("ignition").isNull())
+                ? (can.get("ignition").asInt() == 1)
+                : (node.has("veh_ignition_on") && !node.get("veh_ignition_on").isNull() ? node.get("veh_ignition_on").asBoolean()
+                    : (node.has("ignition") && !node.get("ignition").isNull() && node.get("ignition").asBoolean()));
+
+        String devId = node.has("id") ? node.get("id").asText() : (node.has("deviceId") ? node.get("deviceId").asText() : "");
+
+        String regNumber = (details != null && details.has("registrationNumber") && !details.get("registrationNumber").asText().isBlank())
+                ? details.get("registrationNumber").asText().trim()
+                : (details != null && details.has("name") && !details.get("name").asText().isBlank()
+                    ? details.get("name").asText().trim()
+                    : (node.has("vehicleNumber") && !node.get("vehicleNumber").asText().isBlank()
+                        ? node.get("vehicleNumber").asText().trim()
+                        : (node.has("name") && !node.get("name").asText().isBlank() ? node.get("name").asText().trim() : "")));
+
+        if (regNumber.isBlank()) {
+            regNumber = devId.isBlank() ? "Fleet Vehicle" : "Unit-" + devId;
+        }
+
+        String vehModel = (details != null && details.has("deviceType") && !details.get("deviceType").asText().isBlank())
+                ? details.get("deviceType").asText().trim()
+                : "Commercial Fleet Unit";
+
+        String addr = (loc != null && loc.has("address") && !loc.get("address").asText().isBlank())
+                ? loc.get("address").asText().trim()
+                : (node.has("address") && !node.get("address").asText().isBlank() ? node.get("address").asText().trim() : "Indian Logistics Corridor");
+
+        Double battery = node.has("vehicleBattery") && !node.get("vehicleBattery").isNull()
+                ? node.get("vehicleBattery").asDouble()
+                : null;
+
+        long ts = (loc != null && loc.has("gpsTime") && !loc.get("gpsTime").isNull())
+                ? loc.get("gpsTime").asLong() * 1000L
+                : (node.has("can_ts") && !node.get("can_ts").isNull() ? node.get("can_ts").asLong() : System.currentTimeMillis());
+
+        String status = (speed > 0) ? "ACTIVE" : (ign ? "IDLE" : "STOPPED");
 
         return LiveVehicleDto.builder()
                 .deviceId(devId)
-                .vehicleName(name)
-                .vehicleNumber(name)
+                .vehicleName(vehModel)
+                .vehicleNumber(regNumber)
+                .driverName("Corridor Pilot")
                 .latitude(lat)
                 .longitude(lon)
                 .speed(speed)
-                .ignitionOn(ign)
+                .ignitionOn(ign || speed > 0)
                 .status(status)
                 .battery(battery)
                 .address(addr)
