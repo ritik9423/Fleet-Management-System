@@ -257,27 +257,10 @@ export function LiveMapPage() {
     return filteredVehicles.slice(start, start + pageSize)
   }, [filteredVehicles, currentPage, pageSize])
 
-  // Real InTouch Geofences / Hubs (Auto-ON by default)
-  const [showGeofences] = useState(true)
-  const [geofences, setGeofences] = useState<any[]>([])
+  // Pure Blue Fleet Clusters (Geofences disabled so only blue clusters show)
+  const [showGeofences] = useState(false)
+  const geofences: any[] = []
   const geofenceMarkersRef = useRef<any[]>([])
-
-  // Load real geofences from InTouch
-  useEffect(() => {
-    const fetchGeofences = async () => {
-      try {
-        const res = await api.get("/map/intouch/geofences")
-        const raw = res.data
-        const data = typeof raw === "string" ? JSON.parse(raw) : raw
-        if (data && Array.isArray(data.data)) {
-          setGeofences(data.data)
-        }
-      } catch (e) {
-        console.warn("Geofences load error:", e)
-      }
-    }
-    fetchGeofences()
-  }, [])
 
   const movingCount = useMemo(() => vehicles.filter((v) => v.status === "ACTIVE").length, [vehicles])
   const idleCount = useMemo(() => vehicles.filter((v) => v.status !== "ACTIVE").length, [vehicles])
@@ -524,44 +507,24 @@ export function LiveMapPage() {
       leafletMarkersRef.current.forEach((m) => m.remove())
       leafletMarkersRef.current = []
 
-      // Build markers array
+      // Build markers array — uniform blue cluster styling
       const markers: L.Marker[] = []
       vehicles.forEach((v) => {
-        const isMoving = v.status === "ACTIVE"
-        const isPhoneGps = v.deviceId?.startsWith("PHONE-")
-        const markerBg = isPhoneGps ? "#0ea5e9" : (isMoving ? "#10b981" : "#f59e0b")
-        const iconGlyph = isPhoneGps ? "📱" : "🚚"
-
         const markerHtml = `
-          <div style="
-            background: ${markerBg};
-            border: 2px solid white;
-            border-radius: 50%;
-            width: ${isPhoneGps ? "36px" : "32px"};
-            height: ${isPhoneGps ? "36px" : "32px"};
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 14px ${isPhoneGps ? "rgba(14,165,233,0.5)" : "rgba(0,0,0,0.3)"};
-            font-size: ${isPhoneGps ? "16px" : "14px"};
-            cursor: pointer;
-            transition: transform 0.2s;
-            ${isPhoneGps ? "animation: pulse 2s infinite;" : ""}
-          ">
-            ${iconGlyph}
+          <div class="fleet-cluster fleet-cluster-small" style="width:36px;height:36px;font-size:12px;">
+            <span>1</span>
           </div>
         `
         const customIcon = L.divIcon({
-          className: "custom-truck-marker",
+          className: "fleet-cluster-icon",
           html: markerHtml,
-          iconSize: isPhoneGps ? [36, 36] : [32, 32],
-          iconAnchor: isPhoneGps ? [18, 18] : [16, 16],
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
           popupAnchor: [0, -18],
         })
 
         const popupContent = `
           <div style="font-family: inherit; font-size: 12px; padding: 4px; line-height: 1.4;">
-            ${isPhoneGps ? '<span style="background: #e0f2fe; color: #0284c7; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 10px; display: inline-block; margin-bottom: 4px;">📱 LIVE MOBILE PHONE GPS</span><br/>' : ''}
             <b style="color: #0078d4; font-size: 13px;">${v.plate}</b> — ${v.model}<br/>
             Driver: <b>${v.driver}</b><br/>
             Speed: <b>${v.speed} km/h</b> | Battery: <b>${v.battery ? `${v.battery}%` : "N/A"}</b><br/>
@@ -654,25 +617,17 @@ export function LiveMapPage() {
         mapplsMarkersRef.current = []
 
         if (!clusteringEnabled) {
-          // No clustering — render all markers individually with sleek custom badges
+          // No clustering — render all markers as sleek blue badges
           vehicles.forEach((v) => {
             try {
-              const isMoving = v.status === "ACTIVE"
-              const isPhoneGps = v.deviceId?.startsWith("PHONE-")
-              const markerBg = isPhoneGps ? "#0ea5e9" : (isMoving ? "#10b981" : "#f59e0b")
-              const iconGlyph = isPhoneGps ? "📱" : "🚚"
-              const vehicleHtml = `
-                <div style="background:${markerBg};border:2px solid white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,0.3);font-size:14px;cursor:pointer;transform:translate(-50%,-50%);">
-                  ${iconGlyph}
-                </div>
-              `
+              const clusterHtml = `<div class="fleet-cluster fleet-cluster-small" style="width:36px;height:36px;font-size:12px;"><span>1</span></div>`
               const marker = new window.mappls.Marker({
                 map,
                 position: { lat: v.lat, lng: v.lng },
                 fitbounds: false,
-                html: vehicleHtml,
-                width: 32,
-                height: 32,
+                html: clusterHtml,
+                width: 36,
+                height: 36,
                 offset: [0, 0],
                 popupHtml: `
                   <div style="font-family: inherit; font-size: 12px; padding: 6px; line-height: 1.4;">
@@ -751,26 +706,18 @@ export function LiveMapPage() {
               mapplsMarkersRef.current.push(marker)
             } catch (e) {}
           } else {
-            // Individual vehicle marker (clean circular badge with truck/mobile icon)
+            // Individual single vehicle (count = 1) — uniform blue cluster badge
             const v = vehicles[props.vehicleIndex]
             if (!v) return
             try {
-              const isMoving = v.status === "ACTIVE"
-              const isPhoneGps = v.deviceId?.startsWith("PHONE-")
-              const markerBg = isPhoneGps ? "#0ea5e9" : (isMoving ? "#10b981" : "#f59e0b")
-              const iconGlyph = isPhoneGps ? "📱" : "🚚"
-              const vehicleHtml = `
-                <div style="background:${markerBg};border:2px solid white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,0.3);font-size:14px;cursor:pointer;transform:translate(-50%,-50%);">
-                  ${iconGlyph}
-                </div>
-              `
+              const clusterHtml = `<div class="fleet-cluster fleet-cluster-small" style="width:36px;height:36px;font-size:12px;"><span>1</span></div>`
               const marker = new window.mappls.Marker({
                 map,
                 position: { lat: v.lat, lng: v.lng },
                 fitbounds: false,
-                html: vehicleHtml,
-                width: 32,
-                height: 32,
+                html: clusterHtml,
+                width: 36,
+                height: 36,
                 offset: [0, 0],
                 popupHtml: `
                   <div style="font-family: inherit; font-size: 12px; padding: 6px; line-height: 1.4;">
@@ -853,77 +800,19 @@ export function LiveMapPage() {
     }
   }, [vehicles, mapEngine, clusteringEnabled])
 
-  // 3. Render Geofence Markers on toggle
+  // 3. Clear any Geofence Markers (Geofences disabled: ONLY Blue Fleet Clusters show)
   useEffect(() => {
-    if (mapEngine === "leaflet" && leafletMapRef.current) {
+    if (leafletGeofencesRef.current.length > 0) {
       leafletGeofencesRef.current.forEach((g) => g.remove())
       leafletGeofencesRef.current = []
-
-      if (showGeofences && geofences.length > 0) {
-        geofences.slice(0, 100).forEach((geo) => {
-          if (geo.geometry?.coordinates?.length >= 2) {
-            const [lng, lat] = geo.geometry.coordinates
-            const circle = L.circle([lat, lng], {
-              radius: geo.buffer || 300,
-              color: "#2563eb",
-              fillColor: "#3b82f6",
-              fillOpacity: 0.2,
-              weight: 1.5,
-            })
-              .addTo(leafletMapRef.current!)
-              .bindPopup(`
-                <div style="font-size: 12px; line-height: 1.4;">
-                  <b style="color: #2563eb;">🏢 Hub: ${geo.name || "Logistics Hub"}</b><br/>
-                  Type: <b>${geo.geozoneType || "Hub"}</b> | Radius: <b>${geo.buffer || 200}m</b>
-                </div>
-              `)
-            leafletGeofencesRef.current.push(circle)
-          }
-        })
-      }
-    } else if (mapEngine === "mappls" && mapplsMapRef.current && window.mappls) {
-      geofenceMarkersRef.current.forEach((m) => {
-        try {
-          if (typeof m.remove === "function") m.remove()
-        } catch (ignored) {}
-      })
-      geofenceMarkersRef.current = []
-
-      if (showGeofences && geofences.length > 0) {
-        geofences.slice(0, 100).forEach((geo) => {
-          try {
-            if (geo.geometry?.coordinates?.length >= 2) {
-              const [lng, lat] = geo.geometry.coordinates
-              const marker = new window.mappls.Marker({
-                map: mapplsMapRef.current,
-                position: { lat, lng },
-                popupHtml: `
-                  <div style="font-family: inherit; font-size: 12px; padding: 6px; line-height: 1.4;">
-                    <b style="color: #2563eb; font-size: 13px;">🏢 Hub: ${geo.name || "Logistics Hub"}</b><br/>
-                    Type: <b>${geo.geozoneType || "Hub"}</b> | Radius: <b>${geo.buffer || 200}m</b>
-                  </div>
-                `,
-              })
-              geofenceMarkersRef.current.push(marker)
-            }
-          } catch (err) {}
-        })
-      }
     }
-
-    return () => {
-      leafletGeofencesRef.current.forEach((g) => {
-        try { g.remove() } catch (e) {}
-      })
-      leafletGeofencesRef.current = []
+    if (geofenceMarkersRef.current.length > 0) {
       geofenceMarkersRef.current.forEach((m) => {
-        try {
-          if (typeof m.remove === "function") m.remove()
-        } catch (e) {}
+        try { if (typeof m.remove === "function") m.remove() } catch (ignored) {}
       })
       geofenceMarkersRef.current = []
     }
-  }, [showGeofences, geofences, mapEngine])
+  }, [mapEngine])
 
   // Focus vehicle
   const focusVehicle = (v: MapVehicle) => {
