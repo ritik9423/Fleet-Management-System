@@ -296,6 +296,15 @@ export function LiveMapPage() {
         })
         mapplsMapRef.current = map
         setMapEngine("mappls")
+
+        // Crucial for Mobile: Trigger resize after canvas attaches to mobile DOM
+        setTimeout(() => {
+          try {
+            if (map && typeof map.resize === "function") {
+              map.resize()
+            }
+          } catch (_) {}
+        }, 300)
         return
       } catch (err) {
         console.warn("MapmyIndia native initialization error, gracefully switching to Leaflet:", err)
@@ -325,11 +334,33 @@ export function LiveMapPage() {
 
       leafletMapRef.current = lMap
       setMapEngine("leaflet")
+
+      // Crucial for Mobile: Invalidate size so all tiles render on small screens
+      setTimeout(() => {
+        try {
+          lMap.invalidateSize()
+        } catch (_) {}
+      }, 300)
     } catch (lErr) {
       console.error("Leaflet initialization error:", lErr)
     }
 
+    const handleMobileResize = () => {
+      try {
+        if (mapplsMapRef.current && typeof mapplsMapRef.current.resize === "function") {
+          mapplsMapRef.current.resize()
+        }
+        if (leafletMapRef.current) {
+          leafletMapRef.current.invalidateSize()
+        }
+      } catch (_) {}
+    }
+    window.addEventListener("resize", handleMobileResize)
+    window.addEventListener("orientationchange", handleMobileResize)
+
     return () => {
+      window.removeEventListener("resize", handleMobileResize)
+      window.removeEventListener("orientationchange", handleMobileResize)
       if (leafletMapRef.current) {
         try {
           leafletMapRef.current.remove()

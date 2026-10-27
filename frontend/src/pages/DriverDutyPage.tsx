@@ -340,6 +340,14 @@ export function DriverDutyPage() {
         })
         mapplsMapRef.current = map
 
+        setTimeout(() => {
+          try {
+            if (map && typeof map.resize === "function") {
+              map.resize()
+            }
+          } catch (_) {}
+        }, 300)
+
         // Create Mappls Marker
         try {
           const marker = new window.mappls.Marker({
@@ -431,11 +439,33 @@ export function DriverDutyPage() {
       polylineRef.current = polyline
 
       leafletMapRef.current = map
+
+      // Crucial for Mobile: Trigger invalidateSize on mobile attach
+      setTimeout(() => {
+        try {
+          map.invalidateSize()
+        } catch (_) {}
+      }, 300)
     } catch (lErr) {
       console.error("Leaflet initialization error:", lErr)
     }
 
+    const handleMobileResize = () => {
+      try {
+        if (mapplsMapRef.current && typeof mapplsMapRef.current.resize === "function") {
+          mapplsMapRef.current.resize()
+        }
+        if (leafletMapRef.current) {
+          leafletMapRef.current.invalidateSize()
+        }
+      } catch (_) {}
+    }
+    window.addEventListener("resize", handleMobileResize)
+    window.addEventListener("orientationchange", handleMobileResize)
+
     return () => {
+      window.removeEventListener("resize", handleMobileResize)
+      window.removeEventListener("orientationchange", handleMobileResize)
       if (leafletMapRef.current) {
         try {
           leafletMapRef.current.remove()
