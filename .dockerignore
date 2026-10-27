@@ -1,0 +1,15 @@
+**/.git
+**/.github
+**/node_modules
+**/target
+**/*.class
+**/*.jar
+**/.env
+**/.env.*
+frontend/
+docs/
+.vscode/
+.idea/
+.settings/
+.project
+.classpath
