@@ -118,9 +118,10 @@ export function DriverDutyPage() {
 
   // Map Engine & Mappls SDK State
   const [mapEngine, setMapEngine] = useState<"mappls" | "leaflet">("mappls")
-  const [accessToken, setAccessToken] = useState<string>("")
+  const [accessToken, setAccessToken] = useState<string>(() => sessionStorage.getItem("mappls_token") || "")
   const [isSdkLoaded, setIsSdkLoaded] = useState<boolean>(Boolean(window.mappls))
-  const [isSdkLoading, setIsSdkLoading] = useState<boolean>(false)
+  const [isSdkLoading, setIsSdkLoading] = useState<boolean>(!window.mappls)
+  const [mapplsLoadFailed, setMapplsLoadFailed] = useState<boolean>(false)
 
   // Map DOM & Instance Refs
   const mapContainerRef = useRef<HTMLDivElement>(null)
@@ -186,10 +187,16 @@ export function DriverDutyPage() {
       try {
         const res = await api.post("/map/token", {})
         if (res.data?.access_token) {
+          sessionStorage.setItem("mappls_token", res.data.access_token)
           setAccessToken(res.data.access_token)
         }
       } catch (err) {
-        console.warn("Mappls token fetch error, defaulting to Leaflet:", err)
+        console.warn("Mappls token fetch error:", err)
+        if (!sessionStorage.getItem("mappls_token") && !window.mappls) {
+          setMapplsLoadFailed(true)
+          setIsSdkLoading(false)
+          setMapEngine("leaflet")
+        }
       }
     }
     fetchToken()
@@ -197,11 +204,12 @@ export function DriverDutyPage() {
 
   // Ingest MapmyIndia (Mappls) Vector SDK script dynamically
   useEffect(() => {
-    if (!accessToken) return
     if (window.mappls) {
       setIsSdkLoaded(true)
+      setIsSdkLoading(false)
       return
     }
+    if (!accessToken) return
 
     setIsSdkLoading(true)
     const scriptId = "mappls-vector-sdk-script"
@@ -212,9 +220,10 @@ export function DriverDutyPage() {
         console.warn("Mappls script load timeout, switching to fast logistics engine.")
         setIsSdkLoading(false)
         setIsSdkLoaded(false)
+        setMapplsLoadFailed(true)
         setMapEngine("leaflet")
       }
-    }, 3000)
+    }, 5000)
 
     if (!script) {
       script = document.createElement("script")
@@ -234,6 +243,7 @@ export function DriverDutyPage() {
       console.warn("Mappls Vector SDK script load failed, falling back to Leaflet.")
       setIsSdkLoading(false)
       setIsSdkLoaded(false)
+      setMapplsLoadFailed(true)
       setMapEngine("leaflet")
     }
   }, [accessToken])
@@ -386,7 +396,7 @@ export function DriverDutyPage() {
     }
 
     // If Mappls is still downloading, wait for it without mounting and destroying Leaflet
-    if (mapEngine === "mappls" && isSdkLoading && !window.mappls) {
+    if (!mapplsLoadFailed && !window.mappls) {
       return
     }
 
@@ -477,7 +487,7 @@ export function DriverDutyPage() {
         mapplsMapRef.current = null
       }
     }
-  }, [mapEngine, isSdkLoaded])
+  }, [mapEngine, isSdkLoaded, mapplsLoadFailed])
 
   // Send GPS coordinate payload to backend & update Map
   const broadcastLocation = async (lat: number, lng: number, speed: number, head: number, acc: number | null, customStatus?: DutySessionState["status"], notes?: string) => {
@@ -1109,7 +1119,7 @@ export function DriverDutyPage() {
                 <div ref={mapContainerRef} className="w-full h-full" />
 
                 {/* Instant Map Loading Overlay */}
-                {isSdkLoading && !window.mappls && (
+                {(!isSdkLoaded && !mapplsLoadFailed) && (
                   <div className="absolute inset-0 z-[500] bg-slate-50 flex flex-col items-center justify-center gap-2 text-slate-500">
                     <div className="w-7 h-7 rounded-full border-2 border-[#0078d4] border-t-transparent animate-spin" />
                     <span className="text-[11px] font-bold text-slate-600">

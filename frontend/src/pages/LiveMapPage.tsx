@@ -60,7 +60,7 @@ export function LiveMapPage() {
   const leafletGeofencesRef = useRef<(L.Marker | L.Circle)[]>([])
   const [clusteringEnabled, setClusteringEnabled] = useState<boolean>(true)
 
-  const [mapEngine, setMapEngine] = useState<"mappls" | "leaflet">("leaflet")
+  const [mapEngine, setMapEngine] = useState<"mappls" | "leaflet">("mappls")
   const [vehicles, setVehicles] = useState<MapVehicle[]>([])
   const [selectedVehicle, setSelectedVehicle] = useState<MapVehicle | null>(null)
   const [isLoadingVehicles, setIsLoadingVehicles] = useState<boolean>(true)
@@ -123,23 +123,38 @@ export function LiveMapPage() {
     }
   }, [role, user?.username])
 
-  // Fresh OAuth Token loaded from backend
-  const [accessToken, setAccessToken] = useState<string>("")
+  // Fresh OAuth Token loaded from backend (or cached session token)
+  const [accessToken, setAccessToken] = useState<string>(() => sessionStorage.getItem("mappls_token") || "")
   const [isSdkLoaded, setIsSdkLoaded] = useState<boolean>(Boolean(window.mappls))
-  const [isSdkLoading, setIsSdkLoading] = useState<boolean>(false)
+  const [isSdkLoading, setIsSdkLoading] = useState<boolean>(!window.mappls)
+  const [mapplsLoadFailed, setMapplsLoadFailed] = useState<boolean>(false)
 
   useEffect(() => {
+    let isMounted = true
     const fetchTokenFromBackend = async () => {
       try {
         const res = await api.post("/map/token", {})
-        if (res.data && res.data.access_token) {
+        if (res.data && res.data.access_token && isMounted) {
+          sessionStorage.setItem("mappls_token", res.data.access_token)
           setAccessToken(res.data.access_token)
         }
       } catch (err) {
-        console.warn("Mappls token fetch failed, defaulting to reliable map engine:", err)
+        console.warn("Mappls token fetch failed:", err)
+        if (isMounted && !sessionStorage.getItem("mappls_token") && !window.mappls) {
+          setTimeout(() => {
+            if (isMounted && !window.mappls) {
+              setMapplsLoadFailed(true)
+              setIsSdkLoading(false)
+              setMapEngine("leaflet")
+            }
+          }, 4000)
+        }
       }
     }
     fetchTokenFromBackend()
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   // Search, filter & pagination state
@@ -195,33 +210,60 @@ export function LiveMapPage() {
 
   // Try loading MapmyIndia SDK once fresh token arrives
   useEffect(() => {
-    if (!accessToken) return
     if (window.mappls) {
       setIsSdkLoaded(true)
+      setIsSdkLoading(false)
       return
     }
+    if (!accessToken) return
 
     setIsSdkLoading(true)
     const scriptId = "mappls-vector-sdk-script"
-    const existing = document.getElementById(scriptId)
-    if (existing) existing.remove()
+    let script = document.getElementById(scriptId) as HTMLScriptElement | null
 
-    const script = document.createElement("script")
-    script.id = scriptId
-    script.src = `https://apis.mappls.com/advancedmaps/api/${accessToken}/map_sdk?layer=vector&v=3.0`
-    script.async = true
-    script.onload = () => {
-      setIsSdkLoaded(true)
-      setIsSdkLoading(false)
-    }
-    script.onerror = () => {
-      console.warn("MapmyIndia Vector SDK script load failed, using reliable Leaflet engine.")
-      setIsSdkLoading(false)
-      setIsSdkLoaded(false)
-      setMapEngine("leaflet")
+    const timeout = setTimeout(() => {
+      if (!window.mappls) {
+        console.warn("MapmyIndia Vector SDK load timeout, falling back.")
+        setMapplsLoadFailed(true)
+        setIsSdkLoading(false)
+        setMapEngine("leaflet")
+      }
+    }, 6000)
+
+    if (!script) {
+      script = document.createElement("script")
+      script.id = scriptId
+      script.src = `https://apis.mappls.com/advancedmaps/api/${accessToken}/map_sdk?layer=vector&v=3.0`
+      script.async = true
+      script.onload = () => {
+        clearTimeout(timeout)
+        setIsSdkLoaded(true)
+        setIsSdkLoading(false)
+      }
+      script.onerror = () => {
+        clearTimeout(timeout)
+        console.warn("MapmyIndia Vector SDK script load failed, using reliable Leaflet engine.")
+        setIsSdkLoading(false)
+        setIsSdkLoaded(false)
+        setMapplsLoadFailed(true)
+        setMapEngine("leaflet")
+      }
+      document.head.appendChild(script)
+    } else {
+      if (window.mappls) {
+        clearTimeout(timeout)
+        setIsSdkLoaded(true)
+        setIsSdkLoading(false)
+      } else {
+        script.addEventListener("load", () => {
+          clearTimeout(timeout)
+          setIsSdkLoaded(true)
+          setIsSdkLoading(false)
+        })
+      }
     }
 
-    document.head.appendChild(script)
+    return () => clearTimeout(timeout)
   }, [accessToken])
 
   // 1. Initialize Map ONCE
@@ -294,6 +336,7 @@ export function LiveMapPage() {
         })
         mapplsMapRef.current = map
         setMapEngine("mappls")
+        setIsSdkLoading(false)
 
         // Crucial for Mobile: Trigger resize after canvas attaches to mobile DOM
         setTimeout(() => {
@@ -307,10 +350,17 @@ export function LiveMapPage() {
       } catch (err) {
         console.warn("MapmyIndia native initialization error, gracefully switching to Leaflet:", err)
         mapplsMapRef.current = null
+        setMapplsLoadFailed(true)
       }
     }
 
-    // Strategy B: Rock-solid Leaflet Map with Indian logistics tiles
+    // Crucial: DO NOT mount Leaflet / OpenStreetMap on initial load while MapmyIndia is preparing.
+    // The radar loading overlay keeps the screen clean until MapmyIndia is displayed.
+    if (!mapplsLoadFailed) {
+      return
+    }
+
+    // Strategy B: Rock-solid Leaflet Map with Indian logistics tiles (ONLY if MapmyIndia failed)
     try {
       const mapDiv = document.createElement("div")
       mapDiv.id = "leaflet-map-canvas"
@@ -370,7 +420,7 @@ export function LiveMapPage() {
         mapplsMapRef.current = null
       }
     }
-  }, [isSdkLoaded])
+  }, [isSdkLoaded, mapplsLoadFailed])
 
   // 2. Render Vehicle Markers with clustering support
   useEffect(() => {
@@ -836,7 +886,7 @@ export function LiveMapPage() {
         <div className="lg:col-span-7 xl:col-span-8 rounded-2xl border border-slate-200 overflow-hidden relative shadow-sm bg-slate-100 flex flex-col h-[400px] sm:h-[480px] lg:h-full">
           {/* Map Container */}
           <div ref={mapContainerRef} className="h-full w-full z-10 relative">
-            {isSdkLoading && (
+            {(!isSdkLoaded && !mapplsLoadFailed) && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-900/90 text-white space-y-3">
                 <div className="h-10 w-10 border-3 border-[#0078d4] border-t-transparent rounded-full animate-spin" />
                 <p className="text-sm font-bold tracking-tight">Connecting MapmyIndia Telematics Engine...</p>
