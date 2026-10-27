@@ -133,16 +133,9 @@ export function LiveMapPage() {
   useEffect(() => {
     const fetchTokenFromBackend = async () => {
       try {
-        const res = await fetch("/api/map/token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          if (data && data.access_token) {
-            setAccessToken(data.access_token)
-          }
+        const res = await api.post("/map/token", {})
+        if (res.data && res.data.access_token) {
+          setAccessToken(res.data.access_token)
         }
       } catch (err) {
         console.warn("Mappls token fetch failed, defaulting to reliable map engine:", err)
@@ -186,13 +179,11 @@ export function LiveMapPage() {
   useEffect(() => {
     const fetchGeofences = async () => {
       try {
-        const res = await fetch("/api/map/intouch/geofences")
-        if (res.ok) {
-          const raw = await res.json()
-          const data = typeof raw === "string" ? JSON.parse(raw) : raw
-          if (data && Array.isArray(data.data)) {
-            setGeofences(data.data)
-          }
+        const res = await api.get("/map/intouch/geofences")
+        const raw = res.data
+        const data = typeof raw === "string" ? JSON.parse(raw) : raw
+        if (data && Array.isArray(data.data)) {
+          setGeofences(data.data)
         }
       } catch (e) {
         console.warn("Geofences load error:", e)
@@ -327,8 +318,8 @@ export function LiveMapPage() {
         zoomControl: true,
       })
 
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-        attribution: '&copy; MapmyIndia InTouch Telematics | CARTO',
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
       }).addTo(lMap)
 

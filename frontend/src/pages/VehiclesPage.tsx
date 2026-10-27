@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Modal } from "@/components/ui/modal"
 import { Link } from "react-router-dom"
+import { api } from "@/lib/api"
 import type { VehicleStatus } from "@/types"
 
 interface InTouchVehicle {
@@ -52,9 +53,8 @@ export function VehiclesPage() {
     const fetchVehicles = async () => {
       setIsLoading(true)
       try {
-        const res = await fetch("/api/map/intouch/devices")
-        if (!res.ok) throw new Error("Failed to load devices")
-        const raw = await res.json()
+        const res = await api.get("/map/intouch/devices")
+        const raw = res.data
         const dataList = Array.isArray(raw) ? raw : (raw.data || [])
 
         if (Array.isArray(dataList) && dataList.length > 0) {
@@ -110,10 +110,9 @@ export function VehiclesPage() {
 
           // Also merge active phone GPS duty drivers
           try {
-            const dutyRes = await fetch("/api/driver/duty/active")
-            if (dutyRes.ok) {
-              const dutyList = await dutyRes.json()
-              if (Array.isArray(dutyList) && dutyList.length > 0) {
+            const dutyRes = await api.get("/driver/duty/active")
+            const dutyList = dutyRes.data
+            if (Array.isArray(dutyList) && dutyList.length > 0) {
                 const phoneVehicles: InTouchVehicle[] = dutyList.map((session: any, sIdx: number) => ({
                   id: 990000 + sIdx,
                   licensePlate: session.vehiclePlate || "MOBILE-UNIT",
@@ -132,7 +131,6 @@ export function VehiclesPage() {
                 }))
                 mapped.unshift(...phoneVehicles)
               }
-            }
           } catch (e) {}
 
           if (isMounted) {
@@ -142,10 +140,9 @@ export function VehiclesPage() {
       } catch (err) {
         console.warn("Falling back to live endpoints for vehicles:", err)
         try {
-          const liveRes = await fetch("/api/map/intouch/live")
-          if (liveRes.ok) {
-            const liveData = await liveRes.json()
-            if (Array.isArray(liveData)) {
+          const liveRes = await api.get("/map/intouch/live")
+          const liveData = liveRes.data
+          if (Array.isArray(liveData)) {
               const liveMapped: InTouchVehicle[] = liveData.map((d: any, idx: number) => ({
                 id: Number(d.deviceId) || (idx + 1),
                 licensePlate: d.vehicleNumber || d.vehicleName || `MP-FLEET-${idx + 1}`,
@@ -164,7 +161,6 @@ export function VehiclesPage() {
               }))
               if (isMounted) setVehicles(liveMapped)
             }
-          }
         } catch (e2) {
           console.error("Device polling failed:", e2)
         }

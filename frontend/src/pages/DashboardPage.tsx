@@ -153,10 +153,10 @@ export function DashboardPage() {
       }
 
       // 1. ADMIN & DISPATCHER: Fetch real MapmyIndia InTouch overview
-      const overviewRes = await fetch("/api/map/intouch/overview")
-      if (overviewRes.ok) {
-        const ov = await overviewRes.json()
-        const total = ov.totalVehicles || 885
+      const overviewRes = await api.get("/map/intouch/overview")
+      const ov = overviewRes.data
+      if (ov) {
+          const total = ov.totalVehicles || 885
         const moving = ov.movingVehicles || ov.activeVehicles || 166
         const stopped = ov.stoppedVehicles || 682
         const utilRate = total > 0 ? Number(((moving / total) * 100).toFixed(1)) : 18.8

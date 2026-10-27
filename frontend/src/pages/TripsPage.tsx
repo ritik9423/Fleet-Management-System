@@ -65,10 +65,9 @@ export function TripsPage() {
 
       // Admin & Dispatcher: Full fleet active runs & dispatches
       try {
-        const res = await fetch("/api/map/intouch/overview")
-        if (res.ok) {
-          const ov = await res.json()
-          if (Array.isArray(ov.activeDispatches) && ov.activeDispatches.length > 0) {
+        const res = await api.get("/map/intouch/overview")
+        const ov = res.data
+        if (ov && Array.isArray(ov.activeDispatches) && ov.activeDispatches.length > 0) {
             const mapped: Trip[] = ov.activeDispatches.map((d: any) => ({
               id: d.id,
               vehicleId: d.vehicleId,
@@ -86,7 +85,6 @@ export function TripsPage() {
             setTrips(mapped)
             return
           }
-        }
       } catch (e) {
         console.warn("InTouch trips error:", e)
       }
