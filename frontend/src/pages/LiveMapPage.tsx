@@ -443,11 +443,13 @@ export function LiveMapPage() {
       if (clusteringEnabled) {
         // Create MarkerClusterGroup with custom styling
         const clusterGroup = L.markerClusterGroup({
-          maxClusterRadius: 60,
-          spiderfyOnMaxZoom: true,
+          maxClusterRadius: 50,
+          spiderfyOnMaxZoom: false, // Prevents clusters from exploding into spider legs
           showCoverageOnHover: false,
           zoomToBoundsOnClick: true,
-          disableClusteringAtZoom: 15,
+          disableClusteringAtZoom: 18, // Keeps clusters cohesive until street level
+          animate: true,
+          animateAddingMarkers: false,
           chunkedLoading: true,
           iconCreateFunction: (cluster) => {
             const count = cluster.getChildCount()
@@ -489,19 +491,22 @@ export function LiveMapPage() {
       }))
 
       const sc = new Supercluster({
-        radius: 60,
-        maxZoom: 16,
+        radius: 50,
+        maxZoom: 18,
         minZoom: 0,
       })
       sc.load(geoFeatures)
       superclusterRef.current = sc
+
+      // Debounce timer to prevent rapid teardown and re-creation during zoom/pan animations
+      let renderDebounceTimer: any = null
 
       // Function to render clusters at current zoom/bounds
       const renderMapplsClusters = () => {
         const map = mapplsMapRef.current
         if (!map || !superclusterRef.current) return
 
-        // Clear existing markers
+        // Clear existing markers safely
         mapplsMarkersRef.current.forEach((m) => {
           try {
             if (typeof m.remove === "function") m.remove()
@@ -510,13 +515,26 @@ export function LiveMapPage() {
         mapplsMarkersRef.current = []
 
         if (!clusteringEnabled) {
-          // No clustering — render all markers individually
+          // No clustering — render all markers individually with sleek custom badges
           vehicles.forEach((v) => {
             try {
+              const isMoving = v.status === "ACTIVE"
+              const isPhoneGps = v.deviceId?.startsWith("PHONE-")
+              const markerBg = isPhoneGps ? "#0ea5e9" : (isMoving ? "#10b981" : "#f59e0b")
+              const iconGlyph = isPhoneGps ? "📱" : "🚚"
+              const vehicleHtml = `
+                <div style="background:${markerBg};border:2px solid white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,0.3);font-size:14px;cursor:pointer;transform:translate(-50%,-50%);">
+                  ${iconGlyph}
+                </div>
+              `
               const marker = new window.mappls.Marker({
                 map,
                 position: { lat: v.lat, lng: v.lng },
                 fitbounds: false,
+                html: vehicleHtml,
+                width: 32,
+                height: 32,
+                offset: [0, 0],
                 popupHtml: `
                   <div style="font-family: inherit; font-size: 12px; padding: 6px; line-height: 1.4;">
                     <b style="color: #0078d4; font-size: 13px;">${v.plate}</b> — ${v.model}<br/>
@@ -569,7 +587,7 @@ export function LiveMapPage() {
             else if (count >= 20) { size = 48; fontSize = 13 }
 
             const sizeClass = count >= 100 ? 'large' : count >= 20 ? 'medium' : 'small'
-            const clusterHtml = `<div class="fleet-cluster fleet-cluster-${sizeClass}" style="width:${size}px;height:${size}px;font-size:${fontSize}px"><span>${count}</span></div>`
+            const clusterHtml = `<div class="fleet-cluster fleet-cluster-${sizeClass}" style="width:${size}px;height:${size}px;font-size:${fontSize}px;"><span>${count}</span></div>`
 
             try {
               const marker = new window.mappls.Marker({
@@ -581,30 +599,40 @@ export function LiveMapPage() {
                 height: size,
                 offset: [0, 0],
               })
-              // Zoom into the cluster on click
+              // Smooth step zoom into the cluster on click without violent jumping
               if (marker && typeof marker.addListener === "function") {
                 marker.addListener("click", () => {
-                  const expansionZoom = Math.min(
-                    superclusterRef.current?.getClusterExpansionZoom(props.cluster_id) ?? zoom + 2,
-                    18
-                  )
+                  const targetZoom = Math.min(zoom + 2, 17)
                   try {
                     if (typeof map.setCenter === "function") map.setCenter({ lat, lng })
-                    if (typeof map.setZoom === "function") map.setZoom(expansionZoom)
+                    if (typeof map.setZoom === "function") map.setZoom(targetZoom)
                   } catch (e) {}
                 })
               }
               mapplsMarkersRef.current.push(marker)
             } catch (e) {}
           } else {
-            // Individual vehicle marker
+            // Individual vehicle marker (clean circular badge with truck/mobile icon)
             const v = vehicles[props.vehicleIndex]
             if (!v) return
             try {
+              const isMoving = v.status === "ACTIVE"
+              const isPhoneGps = v.deviceId?.startsWith("PHONE-")
+              const markerBg = isPhoneGps ? "#0ea5e9" : (isMoving ? "#10b981" : "#f59e0b")
+              const iconGlyph = isPhoneGps ? "📱" : "🚚"
+              const vehicleHtml = `
+                <div style="background:${markerBg};border:2px solid white;border-radius:50%;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,0.3);font-size:14px;cursor:pointer;transform:translate(-50%,-50%);">
+                  ${iconGlyph}
+                </div>
+              `
               const marker = new window.mappls.Marker({
                 map,
                 position: { lat: v.lat, lng: v.lng },
                 fitbounds: false,
+                html: vehicleHtml,
+                width: 32,
+                height: 32,
+                offset: [0, 0],
                 popupHtml: `
                   <div style="font-family: inherit; font-size: 12px; padding: 6px; line-height: 1.4;">
                     <b style="color: #0078d4; font-size: 13px;">${v.plate}</b> — ${v.model}<br/>
@@ -626,19 +654,27 @@ export function LiveMapPage() {
       // Initial render
       renderMapplsClusters()
 
-      // Re-render clusters on zoom change
+      const scheduleDebouncedRender = () => {
+        if (renderDebounceTimer) clearTimeout(renderDebounceTimer)
+        renderDebounceTimer = setTimeout(() => {
+          renderMapplsClusters()
+        }, 120)
+      }
+
+      // Re-render clusters smoothly on zoom / pan end
       if (mapplsZoomListenerRef.current) {
         try {
           if (typeof mapplsMapRef.current.off === "function") {
             mapplsMapRef.current.off("zoomend", mapplsZoomListenerRef.current)
+            mapplsMapRef.current.off("moveend", mapplsZoomListenerRef.current)
           }
         } catch (e) {}
       }
-      mapplsZoomListenerRef.current = renderMapplsClusters
+      mapplsZoomListenerRef.current = scheduleDebouncedRender
       try {
         if (typeof mapplsMapRef.current.on === "function") {
-          mapplsMapRef.current.on("zoomend", renderMapplsClusters)
-          mapplsMapRef.current.on("moveend", renderMapplsClusters)
+          mapplsMapRef.current.on("zoomend", scheduleDebouncedRender)
+          mapplsMapRef.current.on("moveend", scheduleDebouncedRender)
         }
       } catch (e) {}
     }

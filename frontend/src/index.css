@@ -16,12 +16,14 @@
   font-weight: 900;
   font-family: 'JetBrains Mono', monospace;
   box-sizing: border-box;
+  transform: translate(-50%, -50%);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
+  user-select: none;
 }
 
 .fleet-cluster:hover {
-  transform: scale(1.15);
+  transform: translate(-50%, -50%) scale(1.12);
 }
 
 .fleet-cluster span {
