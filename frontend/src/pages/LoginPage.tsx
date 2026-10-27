@@ -126,6 +126,7 @@ export function LoginPage({ initialMode = "login" }: LoginPageProps) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [slowServerWarning, setSlowServerWarning] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [touchedEmail, setTouchedEmail] = useState(false);
@@ -143,10 +144,31 @@ export function LoginPage({ initialMode = "login" }: LoginPageProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Proactively ping backend to wake up cloud server (Render free tier cold-start) and pre-warm DB pool
+  // Proactively ping backend on mount and periodically to pre-warm the database connection pool
   useEffect(() => {
     api.get("/health").catch(() => {});
+    const interval = setInterval(() => {
+      api.get("/health").catch(() => {});
+    }, 4 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
+
+  // Show cold-start message if request takes > 2.5s
+  useEffect(() => {
+    let timer: any;
+    if (loading) {
+      timer = setTimeout(() => {
+        setSlowServerWarning(true);
+      }, 2500);
+    } else {
+      setSlowServerWarning(false);
+    }
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  const triggerPreWarm = () => {
+    api.get("/health").catch(() => {});
+  };
 
   const handleRoleChange = (newRole: Role) => {
     setSelectedRole(newRole);
@@ -406,7 +428,7 @@ export function LoginPage({ initialMode = "login" }: LoginPageProps) {
         loop
         muted
         playsInline
-        preload="auto"
+        preload="metadata"
         className="login-page-v2__background-video"
       />
 
@@ -547,6 +569,7 @@ export function LoginPage({ initialMode = "login" }: LoginPageProps) {
               <input
                 type="text"
                 value={username}
+                onFocus={triggerPreWarm}
                 onChange={(e) => {
                   setUsername(e.target.value);
                   setTouchedEmail(true);
@@ -575,6 +598,7 @@ export function LoginPage({ initialMode = "login" }: LoginPageProps) {
                 <input
                   type="email"
                   value={email}
+                  onFocus={triggerPreWarm}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your work email"
                   className="h-11 sm:h-10 w-full rounded-lg sm:rounded border border-[#d9d9d9] px-3 text-sm text-[#262626] outline-none transition focus:border-[#0078d4] focus:ring-2 focus:ring-[#0078d4]/20 hover:border-[#40a9ff] placeholder:text-slate-400"
@@ -592,6 +616,7 @@ export function LoginPage({ initialMode = "login" }: LoginPageProps) {
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
+                  onFocus={triggerPreWarm}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   className="h-11 sm:h-10 w-full rounded-lg sm:rounded border border-[#d9d9d9] px-3 pr-11 text-sm text-[#262626] outline-none transition focus:border-[#0078d4] focus:ring-2 focus:ring-[#0078d4]/20 hover:border-[#40a9ff] placeholder:text-slate-400"
@@ -644,6 +669,12 @@ export function LoginPage({ initialMode = "login" }: LoginPageProps) {
                   <span>Create Account</span>
                 )}
               </button>
+              {slowServerWarning && loading && (
+                <div className="mt-2 text-center text-[12px] text-amber-700 bg-amber-50 border border-amber-200/80 rounded-md py-1.5 px-2.5 animate-pulse flex items-center justify-center gap-1.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                  <span>Connecting cloud server &amp; database... (warming up from sleep)</span>
+                </div>
+              )}
             </div>
 
             {/* Secondary Buttons Row — stacks on very small screens */}

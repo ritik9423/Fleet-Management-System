@@ -2,6 +2,8 @@ package com.fleetops.repository;
 
 import com.fleetops.model.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -12,6 +14,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);
 
-    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.username = :ident OR u.email = :ident OR LOWER(u.username) = LOWER(:ident) OR (:ident IN ('rajesh', 'driver') AND u.username = 'rajesh.sharma')")
-    Optional<User> findByIdentifier(@org.springframework.data.repository.query.Param("ident") String identifier);
+    /**
+     * Highly optimized index-friendly query avoiding SQL functions on indexed columns.
+     */
+    @Query("SELECT u FROM User u WHERE u.username = :raw OR u.email = :raw OR u.username = :lower OR (:lower IN ('rajesh', 'driver') AND u.username = 'rajesh.sharma')")
+    Optional<User> findByIdentifier(@Param("raw") String raw, @Param("lower") String lower);
 }

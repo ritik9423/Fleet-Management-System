@@ -1,0 +1,21 @@
+name: FleetOps Backend Keepalive Heartbeat
+
+on:
+  schedule:
+    # Trigger every 10 minutes to prevent Render free-tier from sleeping / cold-starting
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping-render:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping FleetOps Render Backend Health Endpoint
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "https://fleet-management-system-c9x4.onrender.com/healthz")
+          echo "Render Backend Health HTTP status: $RESPONSE"
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Retrying backend health ping..."
+            sleep 5
+            curl -s -f --max-time 45 "https://fleet-management-system-c9x4.onrender.com/healthz" || true
+          fi

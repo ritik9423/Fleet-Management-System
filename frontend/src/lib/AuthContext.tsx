@@ -61,6 +61,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [token]);
 
+  // Periodic keepalive: pings backend health every 6 minutes so Render server & DB pool stay warm
+  useEffect(() => {
+    const keepAlive = setInterval(() => {
+      api.get("/health").catch(() => {});
+    }, 6 * 60 * 1000);
+    return () => clearInterval(keepAlive);
+  }, []);
+
   const login = async (username: string, password: string) => {
     try {
       const res = await api.post("/auth/login", { username, password });
