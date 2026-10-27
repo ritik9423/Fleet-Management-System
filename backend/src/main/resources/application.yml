@@ -7,6 +7,15 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: FleetOpsHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000          # 5 minutes
+      max-lifetime: 600000          # 10 minutes (recycles before cloud DB drops socket)
+      connection-timeout: 20000     # 20 seconds
+      keepalive-time: 30000         # 30 seconds (pings remote MySQL so connections stay warm)
+      connection-test-query: SELECT 1
 
   jpa:
     hibernate:

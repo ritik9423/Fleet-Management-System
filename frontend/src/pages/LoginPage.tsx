@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
+import { api } from "@/lib/api";
 import type { Role } from "@/types";
 
 // ================= PIXEL-PERFECT FLEETOPS FAST TRUCK LOGO =================
@@ -140,6 +141,11 @@ export function LoginPage({ initialMode = "login" }: LoginPageProps) {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Proactively ping backend to wake up cloud server (Render free tier cold-start) and pre-warm DB pool
+  useEffect(() => {
+    api.get("/health").catch(() => {});
   }, []);
 
   const handleRoleChange = (newRole: Role) => {

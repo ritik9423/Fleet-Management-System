@@ -11,7 +11,7 @@ services:
       - key: PORT
         value: 10000
       - key: DB_URL
-        value: jdbc:mysql://mysql-2fe4f7fe-ticketpro-backend-db.h.aivencloud.com:18198/defaultdb?sslMode=REQUIRED&allowPublicKeyRetrieval=true&serverTimezone=UTC
+        value: jdbc:mysql://mysql-2fe4f7fe-ticketpro-backend-db.h.aivencloud.com:18198/defaultdb?sslMode=REQUIRED&allowPublicKeyRetrieval=true&serverTimezone=UTC&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&useServerPrepStmts=true&connectTimeout=10000&socketTimeout=30000
       - key: DB_USERNAME
         value: avnadmin
       - key: DB_PASSWORD

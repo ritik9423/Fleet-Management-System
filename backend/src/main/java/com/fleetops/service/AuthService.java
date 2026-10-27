@@ -34,14 +34,7 @@ public class AuthService {
         String inputUname = request.getUsername() != null ? request.getUsername().trim() : "";
         String inputPwd = request.getPassword() != null ? request.getPassword() : "";
 
-        User user = userRepository.findByUsername(inputUname)
-                .or(() -> userRepository.findByEmail(inputUname))
-                .or(() -> userRepository.findByUsernameIgnoreCase(inputUname))
-                .or(() -> {
-                    if (inputUname.equalsIgnoreCase("rajesh")) return userRepository.findByUsername("rajesh.sharma");
-                    if (inputUname.equalsIgnoreCase("driver")) return userRepository.findByUsername("rajesh.sharma");
-                    return java.util.Optional.empty();
-                })
+        User user = userRepository.findByIdentifier(inputUname)
                 .orElseThrow(() -> new BusinessException("Invalid username or password"));
 
         // Strict check: Driver can ONLY log in with the exact password set by Admin

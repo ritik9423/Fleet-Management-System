@@ -286,6 +286,12 @@ export function LiveMapPage() {
     }
 
     // Clean up any prior map elements
+    if (leafletClusterGroupRef.current) {
+      try {
+        leafletClusterGroupRef.current.clearLayers()
+      } catch (e) {}
+      leafletClusterGroupRef.current = null
+    }
     if (leafletMapRef.current) {
       try {
         leafletMapRef.current.remove()
@@ -409,15 +415,23 @@ export function LiveMapPage() {
     return () => {
       window.removeEventListener("resize", handleMobileResize)
       window.removeEventListener("orientationchange", handleMobileResize)
+      if (leafletClusterGroupRef.current) {
+        try {
+          leafletClusterGroupRef.current.clearLayers()
+        } catch (e) {}
+        leafletClusterGroupRef.current = null
+      }
       if (leafletMapRef.current) {
         try {
           leafletMapRef.current.remove()
         } catch (e) {}
         leafletMapRef.current = null
+        leafletMarkersRef.current = []
       }
       if (mapplsMapRef.current) {
         safeRemoveMappls(mapplsMapRef.current)
         mapplsMapRef.current = null
+        mapplsMarkersRef.current = []
       }
     }
   }, [isSdkLoaded, mapplsLoadFailed])
@@ -425,6 +439,7 @@ export function LiveMapPage() {
   // 2. Render Vehicle Markers with clustering support
   useEffect(() => {
     if (vehicles.length === 0) return
+    let renderDebounceTimer: any = null
 
     if (mapEngine === "leaflet" && leafletMapRef.current) {
       // Remove existing cluster group or individual markers
@@ -549,7 +564,7 @@ export function LiveMapPage() {
       superclusterRef.current = sc
 
       // Debounce timer to prevent rapid teardown and re-creation during zoom/pan animations
-      let renderDebounceTimer: any = null
+      renderDebounceTimer = null
 
       // Function to render clusters at current zoom/bounds
       const renderMapplsClusters = () => {
@@ -728,6 +743,40 @@ export function LiveMapPage() {
         }
       } catch (e) {}
     }
+
+    return () => {
+      if (renderDebounceTimer) {
+        clearTimeout(renderDebounceTimer)
+      }
+      if (leafletClusterGroupRef.current) {
+        try {
+          leafletClusterGroupRef.current.clearLayers()
+          if (leafletMapRef.current) {
+            leafletMapRef.current.removeLayer(leafletClusterGroupRef.current)
+          }
+        } catch (e) {}
+        leafletClusterGroupRef.current = null
+      }
+      leafletMarkersRef.current.forEach((m) => {
+        try { m.remove() } catch (e) {}
+      })
+      leafletMarkersRef.current = []
+      mapplsMarkersRef.current.forEach((m) => {
+        try {
+          if (typeof m.remove === "function") m.remove()
+        } catch (e) {}
+      })
+      mapplsMarkersRef.current = []
+      if (mapplsZoomListenerRef.current && mapplsMapRef.current) {
+        try {
+          if (typeof mapplsMapRef.current.off === "function") {
+            mapplsMapRef.current.off("zoomend", mapplsZoomListenerRef.current)
+            mapplsMapRef.current.off("moveend", mapplsZoomListenerRef.current)
+          }
+        } catch (e) {}
+        mapplsZoomListenerRef.current = null
+      }
+    }
   }, [vehicles, mapEngine, clusteringEnabled])
 
   // 3. Render Geofence Markers on toggle
@@ -786,6 +835,19 @@ export function LiveMapPage() {
           } catch (err) {}
         })
       }
+    }
+
+    return () => {
+      leafletGeofencesRef.current.forEach((g) => {
+        try { g.remove() } catch (e) {}
+      })
+      leafletGeofencesRef.current = []
+      geofenceMarkersRef.current.forEach((m) => {
+        try {
+          if (typeof m.remove === "function") m.remove()
+        } catch (e) {}
+      })
+      geofenceMarkersRef.current = []
     }
   }, [showGeofences, geofences, mapEngine])
 
@@ -884,16 +946,17 @@ export function LiveMapPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-auto lg:h-[620px]">
         {/* Map Canvas */}
         <div className="lg:col-span-7 xl:col-span-8 rounded-2xl border border-slate-200 overflow-hidden relative shadow-sm bg-slate-100 flex flex-col h-[400px] sm:h-[480px] lg:h-full">
-          {/* Map Container */}
-          <div ref={mapContainerRef} className="h-full w-full z-10 relative">
-            {(!isSdkLoaded && !mapplsLoadFailed) && (
-              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-900/90 text-white space-y-3">
-                <div className="h-10 w-10 border-3 border-[#0078d4] border-t-transparent rounded-full animate-spin" />
-                <p className="text-sm font-bold tracking-tight">Connecting MapmyIndia Telematics Engine...</p>
-                <p className="text-xs text-slate-400">Loading High-Definition Indian Fleet Grid</p>
-              </div>
-            )}
-          </div>
+          {/* Map Container - Keep empty of React children so third-party map libraries can manage DOM */}
+          <div ref={mapContainerRef} className="h-full w-full z-10" />
+
+          {/* Loading Overlay as a sibling, cleanly managed by React */}
+          {(!isSdkLoaded && !mapplsLoadFailed) && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-900/90 text-white space-y-3 pointer-events-none">
+              <div className="h-10 w-10 border-3 border-[#0078d4] border-t-transparent rounded-full animate-spin" />
+              <p className="text-sm font-bold tracking-tight">Connecting MapmyIndia Telematics Engine...</p>
+              <p className="text-xs text-slate-400">Loading High-Definition Indian Fleet Grid</p>
+            </div>
+          )}
 
           {/* Top Left Badge */}
           <div className="absolute top-3 sm:top-4 left-3 sm:left-4 z-[20] flex items-center gap-2 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-white/95 backdrop-blur-md border border-slate-200 text-xs font-bold text-slate-800 shadow-md">
